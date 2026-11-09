@@ -47,9 +47,9 @@ public partial class EditStudentPage : ContentPage
             return;
         }
 
-        if (!int.TryParse(CourseEntry.Text, out int course) || course < 1 || course > 4)
+        if (!int.TryParse(CourseEntry.Text, out int course) || course < 1 || course > 6)
         {
-            await DisplayAlertAsync("Помилка", "Курс має бути числом від 1 до 4!", "OK");
+            await DisplayAlertAsync("Помилка", "Курс має бути числом від 1 до 6!", "OK");
             return;
         }
 
