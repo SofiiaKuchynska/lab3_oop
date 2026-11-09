@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
 namespace lab3.Models;
@@ -59,6 +59,15 @@ public class Student : INotifyPropertyChanged
         get => _checkOutDate;
         set { _checkOutDate = value; OnPropertyChanged(); }
     }
-
-    public Student Clone() => (Student)MemberwiseClone();
+    public Student Clone() => new Student
+    {
+        Id = Id,
+        FullName = FullName,
+        Faculty = Faculty,
+        Course = Course,
+        Room = Room,
+        Department = Department,
+        CheckInDate = CheckInDate,
+        CheckOutDate = CheckOutDate
+    };
 }
