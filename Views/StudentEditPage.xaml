@@ -26,7 +26,7 @@
                     <Entry x:Name="CourseEntry" Placeholder="2" Keyboard="Numeric" TextColor="#0F172A" BackgroundColor="#FFFFFF"/>
                 </VerticalStackLayout>
                 <VerticalStackLayout Grid.Column="1">
-                    <Label Text="Кімната (201-930):" TextColor="#64748B" FontSize="13"/>
+                    <Label Text="Кімната (100-925):" TextColor="#64748B" FontSize="13"/>
                     <Entry x:Name="RoomEntry" Placeholder="506" Keyboard="Numeric" TextColor="#0F172A" BackgroundColor="#FFFFFF"/>
                 </VerticalStackLayout>
             </Grid>
