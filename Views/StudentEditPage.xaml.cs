@@ -41,16 +41,45 @@ public partial class EditStudentPage : ContentPage
             return;
         }
 
-        int.TryParse(CourseEntry.Text, out int course);
-        int.TryParse(RoomEntry.Text, out int room);
+        if (string.IsNullOrWhiteSpace(FacultyEntry.Text))
+        {
+            await DisplayAlertAsync("Помилка", "Вкажіть факультет!", "OK");
+            return;
+        }
+
+        if (!int.TryParse(CourseEntry.Text, out int course) || course < 1 || course > 4)
+        {
+            await DisplayAlertAsync("Помилка", "Курс має бути числом від 1 до 4!", "OK");
+            return;
+        }
+
+        if (!int.TryParse(RoomEntry.Text, out int room) || room < 100 || room > 925)
+        {
+            await DisplayAlertAsync("Помилка", "Номер кімнати має бути від 100 до 925!", "OK");
+            return;
+        }
+
+        string checkIn = CheckInEntry.Text?.Trim() ?? string.Empty;
+        if (!string.IsNullOrEmpty(checkIn) && !DateTime.TryParse(checkIn, out _))
+        {
+            await DisplayAlertAsync("Помилка", "Невірний формат дати поселення (наприклад, 2025-08-28)!", "OK");
+            return;
+        }
+
+        string checkOut = CheckOutEntry.Text?.Trim() ?? string.Empty;
+        if (!string.IsNullOrEmpty(checkOut) && !DateTime.TryParse(checkOut, out _))
+        {
+            await DisplayAlertAsync("Помилка", "Невірний формат дати виселення (наприклад, 2027-06-30)!", "OK");
+            return;
+        }
 
         StudentData.FullName = FullNameEntry.Text.Trim();
-        StudentData.Faculty = FacultyEntry.Text?.Trim() ?? string.Empty;
+        StudentData.Faculty = FacultyEntry.Text.Trim();
         StudentData.Course = course;
         StudentData.Room = room;
         StudentData.Department = DeptEntry.Text?.Trim() ?? string.Empty;
-        StudentData.CheckInDate = CheckInEntry.Text?.Trim() ?? string.Empty;
-        StudentData.CheckOutDate = CheckOutEntry.Text?.Trim() ?? string.Empty;
+        StudentData.CheckInDate = checkIn;
+        StudentData.CheckOutDate = checkOut;
 
         await Navigation.PopModalAsync();
     }
