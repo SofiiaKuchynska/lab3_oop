@@ -1,200 +1,241 @@
-<?xml version="1.0" encoding="utf-8" ?>
-<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
-             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
-             xmlns:models="clr-namespace:lab3.Models"
-             x:Class="lab3.Views.DormitoryView"
-             Title="Гуртожиток КНУ"
-             BackgroundColor="#F8FAFC">
+using System.Text.Json;
+using lab3.Models;
+using lab3.Services;
 
-    <Grid RowDefinitions="Auto,Auto,Auto,*" Padding="16" RowSpacing="12">
+namespace lab3.Views;
 
-        <!-- Верхнє меню дій -->
-        <FlexLayout Grid.Row="0" Wrap="Wrap" JustifyContent="Start" AlignItems="Center">
-            <Button Text="Відкрити JSON" 
-                    Clicked="OnLoadFileClicked" 
-                    BackgroundColor="#E0E7FF" 
-                    TextColor="#3730A3" 
-                    FontAttributes="Bold" 
-                    CornerRadius="10" 
-                    Margin="0,0,10,10" 
-                    Padding="14,8" />
+public partial class DormitoryView : ContentPage
+{
+    private readonly JsonDormitoryManager _manager = new();
+    private List<Student> _currentDisplayedStudents = new();
+    private readonly List<string> _appliedFiltersHistory = new();
 
-            <Button Text="Зберегти в JSON" 
-                    Clicked="OnSaveFileClicked" 
-                    BackgroundColor="#E0E7FF" 
-                    TextColor="#3730A3" 
-                    FontAttributes="Bold" 
-                    CornerRadius="10" 
-                    Margin="0,0,10,10" 
-                    Padding="14,8" />
+    // Чи застосовано зараз хоча б один фільтр
+    private bool IsFiltered => _appliedFiltersHistory.Count > 0;
 
-            <Button Text="+ Додати запис" 
-                    Clicked="OnAddStudentClicked" 
-                    BackgroundColor="#D1FAE5" 
-                    TextColor="#065F46" 
-                    FontAttributes="Bold" 
-                    CornerRadius="10" 
-                    Margin="0,0,10,10" 
-                    Padding="14,8" />
+    public DormitoryView()
+    {
+        InitializeComponent();
+    }
 
-            <Button Text="Про програму" 
-                    Clicked="OnAboutClicked" 
-                    BackgroundColor="#FEF3C7" 
-                    TextColor="#92400E" 
-                    FontAttributes="Bold" 
-                    CornerRadius="10" 
-                    Margin="0,0,10,10" 
-                    Padding="14,8" />
+    private void DisplayStudents(List<Student> students)
+    {
+        _currentDisplayedStudents = students ?? new List<Student>();
+        StudentsCollection.ItemsSource = null;
+        StudentsCollection.ItemsSource = _currentDisplayedStudents;
+        CountLabel.Text = $"Записів: {_currentDisplayedStudents.Count}";
 
-            <Button Text="Вийти" 
-                    Clicked="OnExitClicked" 
-                    BackgroundColor="#FEE2E2" 
-                    TextColor="#991B1B" 
-                    FontAttributes="Bold" 
-                    CornerRadius="10" 
-                    Margin="0,0,10,10" 
-                    Padding="14,8" />
-        </FlexLayout>
+        ActiveFiltersLabel.Text = IsFiltered
+            ? "Активні фільтри: " + string.Join(" ➔ ", _appliedFiltersHistory)
+            : "Активні фільтри: Немає (всі записи)";
+    }
 
-        <!-- Картка пошуку за обраним критерієм -->
-        <Border Grid.Row="1" 
-                StrokeShape="RoundRectangle 12" 
-                Stroke="#E2E8F0" 
-                BackgroundColor="#FFFFFF" 
-                Padding="14">
-            <VerticalStackLayout Spacing="10">
-                <Grid ColumnDefinitions="200,*,Auto,Auto" ColumnSpacing="10" VerticalOptions="Center">
+    // Автозбереження: якщо файл відкрито, усі зміни одразу записуються в нього
+    private async Task PersistChangesAsync()
+    {
+        if (string.IsNullOrEmpty(_manager.CurrentFilePath)) return; // файл ще не відкрито — дані в пам'яті до «Зберегти в JSON»
 
-                    <Picker x:Name="AttributePicker" 
-                            Title="Оберіть критерій"
-                            TextColor="#0F172A" 
-                            TitleColor="#64748B" 
-                            BackgroundColor="#F1F5F9">
-                        <Picker.Items>
-                            <x:String>ПІБ</x:String>
-                            <x:String>Факультет</x:String>
-                            <x:String>Курс</x:String>
-                            <x:String>Номер кімнати</x:String>
-                            <x:String>Кафедра</x:String>
-                            <x:String>Дата поселення</x:String>
-                        </Picker.Items>
-                    </Picker>
+        bool ok = await _manager.SaveCurrentAsync();
+        if (!ok)
+        {
+            await DisplayAlertAsync("Помилка", "Не вдалося записати зміни у файл.", "OK");
+        }
+    }
 
-                    <Entry x:Name="SearchValueEntry" 
-                           Grid.Column="1" 
-                           Placeholder="Введіть значення для фільтрації..." 
-                           PlaceholderColor="#94A3B8" 
-                           TextColor="#0F172A" 
-                           BackgroundColor="#F1F5F9" />
+    private async void OnSearchClicked(object? sender, EventArgs e)
+    {
+        string? selectedUa = AttributePicker.SelectedItem?.ToString();
+        string value = SearchValueEntry.Text?.Trim() ?? string.Empty;
 
-                    <Button Grid.Column="2" 
-                            Text="Пошук" 
-                            Clicked="OnSearchClicked" 
-                            BackgroundColor="#C7D2FE" 
-                            TextColor="#312E81" 
-                            FontAttributes="Bold" 
-                            CornerRadius="8" 
-                            Padding="20,0" />
+        if (string.IsNullOrWhiteSpace(selectedUa))
+        {
+            await DisplayAlertAsync("Увага", "Оберіть критерій для пошуку!", "OK");
+            return;
+        }
 
-                    <Button Grid.Column="3" 
-                            Text="Скинути" 
-                            Clicked="OnClearClicked" 
-                            BackgroundColor="#E2E8F0" 
-                            TextColor="#475569" 
-                            CornerRadius="8" 
-                            Padding="16,0" />
-                </Grid>
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            await DisplayAlertAsync("Увага", "Введіть значення для фільтрації!", "OK");
+            return;
+        }
 
-                <!-- Каскад та лічильник -->
-                <Grid ColumnDefinitions="Auto,Auto,*" ColumnSpacing="10" VerticalOptions="Center">
-                    <CheckBox x:Name="CascadeFilterCheckBox" Color="#4F46E5" VerticalOptions="Center" />
+        string internalAttribute = selectedUa switch
+        {
+            "ПІБ" => "FullName",
+            "Факультет" => "Faculty",
+            "Курс" => "Course",
+            "Номер кімнати" => "Room",
+            "Кафедра" => "Department",
+            "Дата поселення" => "CheckInDate",
+            _ => selectedUa
+        };
 
-                    <Label Grid.Column="1" 
-                           Text="Шукати серед уже відфільтрованих результатів (каскадно)" 
-                           TextColor="#475569" 
-                           FontSize="13" 
-                           VerticalOptions="Center" />
+        var criteria = new SearchCriteria(internalAttribute, value);
 
-                    <Label Grid.Column="2" 
-                           x:Name="CountLabel" 
-                           Text="Записів: 0" 
-                           TextColor="#4338CA" 
-                           FontAttributes="Bold" 
-                           HorizontalOptions="End" 
-                           VerticalOptions="Center" />
-                </Grid>
+        // Каскад: якщо фільтр уже застосовано, звужуємо поточний результат
+        // (навіть якщо він порожній — тоді і результат каскаду коректно порожній)
+        bool isCascade = CascadeFilterCheckBox.IsChecked && IsFiltered;
+        var source = isCascade ? _currentDisplayedStudents : _manager.GetAll();
 
-                <!-- Рядок стану активних фільтрів -->
-                <Label x:Name="ActiveFiltersLabel" 
-                       Text="Активні фільтри: Немає (всі записи)" 
-                       FontSize="12" 
-                       TextColor="#64748B" />
-            </VerticalStackLayout>
-        </Border>
+        if (!isCascade)
+        {
+            _appliedFiltersHistory.Clear();
+        }
 
-        <!-- Шапка таблиці Grid -->
-        <Border Grid.Row="2" 
-                StrokeShape="RoundRectangle 8" 
-                Stroke="#CBD5E1" 
-                BackgroundColor="#EDE9FE" 
-                Padding="12,10">
-            <Grid ColumnDefinitions="2.2*,1.1*,70,75,2*,120" VerticalOptions="Center">
-                <Label Text="ПІБ студента" FontAttributes="Bold" TextColor="#4C1D95" />
-                <Label Grid.Column="1" Text="Факультет" FontAttributes="Bold" TextColor="#4C1D95" />
-                <Label Grid.Column="2" Text="Курс" FontAttributes="Bold" TextColor="#4C1D95" HorizontalOptions="Center" />
-                <Label Grid.Column="3" Text="Кімната" FontAttributes="Bold" TextColor="#4C1D95" HorizontalOptions="Center" />
-                <Label Grid.Column="4" Text="Кафедра" FontAttributes="Bold" TextColor="#4C1D95" />
-                <Label Grid.Column="5" Text="Дії" FontAttributes="Bold" TextColor="#4C1D95" HorizontalOptions="Center" />
-            </Grid>
-        </Border>
+        var result = _manager.FilterByLinq(source, criteria);
+        _appliedFiltersHistory.Add($"[{selectedUa}: \"{value}\"]");
 
-        <!-- Список записів -->
-        <CollectionView Grid.Row="3" x:Name="StudentsCollection" SelectionMode="None">
-            <CollectionView.EmptyView>
-                <VerticalStackLayout Spacing="8" HorizontalOptions="Center" VerticalOptions="Center" Padding="40">
-                    <Label Text="Немає записів для відображення" FontSize="16" TextColor="#64748B" HorizontalOptions="Center" />
-                    <Label Text="Натисніть «Відкрити JSON», щоб завантажити файл" FontSize="13" TextColor="#94A3B8" HorizontalOptions="Center" />
-                </VerticalStackLayout>
-            </CollectionView.EmptyView>
-            <CollectionView.ItemTemplate>
-                <DataTemplate x:DataType="models:Student">
-                    <Border StrokeShape="RoundRectangle 8" 
-                            Stroke="#F1F5F9" 
-                            BackgroundColor="#FFFFFF" 
-                            Padding="12,8" 
-                            Margin="0,3">
-                        <Grid ColumnDefinitions="2.2*,1.1*,70,75,2*,120" VerticalOptions="Center">
-                            <Label Text="{Binding FullName}" TextColor="#1E293B" FontAttributes="Bold" VerticalOptions="Center" />
-                            <Label Grid.Column="1" Text="{Binding Faculty}" TextColor="#2563EB" FontAttributes="Bold" VerticalOptions="Center" />
-                            <Label Grid.Column="2" Text="{Binding Course}" TextColor="#475569" HorizontalOptions="Center" VerticalOptions="Center" />
-                            <Label Grid.Column="3" Text="{Binding Room}" TextColor="#059669" FontAttributes="Bold" HorizontalOptions="Center" VerticalOptions="Center" />
-                            <Label Grid.Column="4" Text="{Binding Department}" TextColor="#475569" FontSize="12" VerticalOptions="Center" />
+        DisplayStudents(result);
+    }
 
-                            <HorizontalStackLayout Grid.Column="5" Spacing="6" HorizontalOptions="Center">
-                                <Button Text="Ред." 
-                                        Clicked="OnEditStudentClicked" 
-                                        CommandParameter="{Binding .}" 
-                                        BackgroundColor="#E0E7FF" 
-                                        TextColor="#3730A3" 
-                                        FontSize="12" 
-                                        CornerRadius="6" 
-                                        HeightRequest="32" 
-                                        Padding="10,0" />
-                                <Button Text="Вид." 
-                                        Clicked="OnDeleteStudentClicked" 
-                                        CommandParameter="{Binding .}" 
-                                        BackgroundColor="#FEE2E2" 
-                                        TextColor="#991B1B" 
-                                        FontSize="12" 
-                                        CornerRadius="6" 
-                                        HeightRequest="32" 
-                                        Padding="10,0" />
-                            </HorizontalStackLayout>
-                        </Grid>
-                    </Border>
-                </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
+    private void OnClearClicked(object? sender, EventArgs e)
+    {
+        SearchValueEntry.Text = string.Empty;
+        AttributePicker.SelectedIndex = -1;
+        _appliedFiltersHistory.Clear();
+        DisplayStudents(_manager.GetAll());
+    }
 
-    </Grid>
-</ContentPage>
+    private async void OnLoadFileClicked(object? sender, EventArgs e)
+    {
+        try
+        {
+            var loaded = await _manager.OpenJsonFileAsync();
+            if (loaded == null) return; // користувач скасував вибір
+
+            _appliedFiltersHistory.Clear();
+            DisplayStudents(loaded);
+            await DisplayAlertAsync("Успіх", $"Завантажено {loaded.Count} студентів із файлу!", "OK");
+        }
+        catch (JsonException)
+        {
+            await DisplayAlertAsync("Помилка",
+                "Файл не є коректним JSON або має неправильну структуру.\nОчікується масив студентів: [ { \"FullName\": ..., \"Course\": 2, ... } ]",
+                "OK");
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlertAsync("Помилка", $"Не вдалося відкрити файл:\n{ex.Message}", "OK");
+        }
+    }
+
+    private async void OnSaveFileClicked(object? sender, EventArgs e)
+    {
+        // Зберігаємо те, що бачить користувач: результат фільтра або (без фільтра) всі записи
+        List<Student> dataToSave = IsFiltered ? _currentDisplayedStudents : _manager.GetAll();
+
+        if (dataToSave.Count == 0)
+        {
+            await DisplayAlertAsync("Увага",
+                IsFiltered ? "Поточний фільтр не знайшов жодного запису — зберігати нічого." : "Немає записів для збереження!",
+                "OK");
+            return;
+        }
+
+        string fileName = await DisplayPromptAsync(
+            "Збереження JSON",
+            "Введіть ім'я файлу:",
+            initialValue: "dormitory_filtered.json");
+
+        if (string.IsNullOrWhiteSpace(fileName))
+            return;
+
+        if (!fileName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            fileName += ".json";
+
+        string documentsFolder = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        string fullPath = Path.Combine(documentsFolder, fileName);
+
+        bool success = await _manager.SaveToFileAsync(dataToSave, fullPath);
+        if (success)
+        {
+            await DisplayAlertAsync("Успіх", $"Збережено {dataToSave.Count} записів у файл:\n{fullPath}", "OK");
+        }
+        else
+        {
+            await DisplayAlertAsync("Помилка", "Не вдалося зберегти файл.", "OK");
+        }
+    }
+
+    private async void OnAddStudentClicked(object? sender, EventArgs e)
+    {
+        var editPage = new EditStudentPage(student: null, isNew: true);
+        editPage.Disappearing += async (s, args) =>
+        {
+            if (editPage.StudentData != null && !string.IsNullOrWhiteSpace(editPage.StudentData.FullName))
+            {
+                _manager.AddStudent(editPage.StudentData);
+                _appliedFiltersHistory.Clear();
+                DisplayStudents(_manager.GetAll());
+                await PersistChangesAsync();
+            }
+        };
+        await Navigation.PushModalAsync(editPage);
+    }
+
+    private async void OnEditStudentClicked(object? sender, EventArgs e)
+    {
+        if (sender is Button btn && btn.CommandParameter is Student student)
+        {
+            var editPage = new EditStudentPage(student: student, isNew: false);
+            editPage.Disappearing += async (s, args) =>
+            {
+                if (editPage.IsDeleteRequested)
+                {
+                    await RemoveAndRefreshAsync(student);
+                }
+                else if (editPage.StudentData != null)
+                {
+                    _manager.UpdateStudent(editPage.StudentData);
+                    _appliedFiltersHistory.Clear();
+                    DisplayStudents(_manager.GetAll());
+                    await PersistChangesAsync();
+                }
+            };
+            await Navigation.PushModalAsync(editPage);
+        }
+    }
+
+    private async void OnDeleteStudentClicked(object? sender, EventArgs e)
+    {
+        if (sender is Button btn && btn.CommandParameter is Student student)
+        {
+            bool confirm = await DisplayAlertAsync("Видалення", $"Видалити запис про:\n{student.FullName}?", "Так", "Ні");
+            if (confirm)
+            {
+                await RemoveAndRefreshAsync(student);
+            }
+        }
+    }
+
+    // Видалення не скидає фільтри: запис просто зникає з поточного результату
+    private async Task RemoveAndRefreshAsync(Student student)
+    {
+        _manager.RemoveStudent(student);
+        _currentDisplayedStudents.RemoveAll(s => s.Id == student.Id);
+        DisplayStudents(_currentDisplayedStudents);
+        await PersistChangesAsync();
+    }
+
+    private async void OnAboutClicked(object? sender, EventArgs e)
+    {
+        await DisplayAlertAsync(
+            "Про програму",
+            "Лабораторна робота №3: Диспетчер для JSON\n" +
+            "Студентка: Кучинська Софія\n" +
+            "Курс: 2 | Група: К28\n" +
+            "Рік: 2026\n\n" +
+            "Опис: Програма для фільтрації через LINQ, перегляду, додавання, редагування та експорту відомостей про студентів гуртожитку КНУ.",
+            "Зрозуміло"
+        );
+    }
+
+    private async void OnExitClicked(object? sender, EventArgs e)
+    {
+        bool confirm = await DisplayAlertAsync("Вихід", "Ви дійсно бажаєте вийти з програми?", "Так", "Ні");
+        if (confirm)
+        {
+            Application.Current?.Quit();
+        }
+    }
+}
