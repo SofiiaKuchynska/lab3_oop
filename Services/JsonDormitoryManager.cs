@@ -1,4 +1,4 @@
-﻿using System.Text.Encodings.Web;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using lab3.Models;
 
@@ -15,36 +15,41 @@ public class JsonDormitoryManager
 
     private List<Student> _allStudents = new();
 
+    // Шлях до відкритого файлу: після кожної зміни дані автоматично записуються саме сюди
+    public string? CurrentFilePath { get; private set; }
+
     public List<Student> GetAll() => new(_allStudents);
 
+    // Повертає null, якщо користувач скасував вибір файлу.
+    // Якщо файл пошкоджений, кидає JsonException — його показує користувачу DormitoryView.
     public async Task<List<Student>?> OpenJsonFileAsync()
     {
-        try
+        var result = await FilePicker.Default.PickAsync(new PickOptions
         {
-            var result = await FilePicker.Default.PickAsync(new PickOptions
+            PickerTitle = "Оберіть JSON-файл гуртожитку",
+            FileTypes = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
             {
-                PickerTitle = "Оберіть JSON-файл гуртожитку",
-                FileTypes = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
-                {
-                    { DevicePlatform.WinUI, new[] { ".json" } },
-                    { DevicePlatform.Android, new[] { "application/json" } }
-                })
-            });
+                { DevicePlatform.WinUI, new[] { ".json" } },
+                { DevicePlatform.Android, new[] { "application/json" } }
+            })
+        });
 
-            if (result != null)
-            {
-                using var stream = await result.OpenReadAsync();
-                var loaded = await JsonSerializer.DeserializeAsync<List<Student>>(stream, _jsonOptions);
-                _allStudents = loaded ?? new List<Student>();
-                return new List<Student>(_allStudents);
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Open error: {ex.Message}");
-        }
+        if (result == null) return null;
 
-        return null;
+        using var stream = await result.OpenReadAsync();
+        var loaded = await JsonSerializer.DeserializeAsync<List<Student>>(stream, _jsonOptions);
+
+        // Стан змінюється лише після успішного читання — при помилці старі дані лишаються
+        _allStudents = loaded ?? new List<Student>();
+        CurrentFilePath = result.FullPath;
+        return GetAll();
+    }
+
+    // Записує всі записи у відкритий файл (автозбереження після додавання/редагування/видалення)
+    public async Task<bool> SaveCurrentAsync()
+    {
+        if (string.IsNullOrEmpty(CurrentFilePath)) return false;
+        return await SaveToFileAsync(_allStudents, CurrentFilePath);
     }
 
     public List<Student> LoadFromJson(string filePath)
