@@ -22,7 +22,7 @@
 
             <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
                 <VerticalStackLayout>
-                    <Label Text="Курс (1-4):" TextColor="#64748B" FontSize="13"/>
+                    <Label Text="Курс (1-6):" TextColor="#64748B" FontSize="13"/>
                     <Entry x:Name="CourseEntry" Placeholder="2" Keyboard="Numeric" TextColor="#0F172A" BackgroundColor="#FFFFFF"/>
                 </VerticalStackLayout>
                 <VerticalStackLayout Grid.Column="1">
